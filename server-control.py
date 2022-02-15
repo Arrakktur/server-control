@@ -6,18 +6,21 @@ import configparser
 import logging
 
 class Server:
-	def __init__(self, path, name, host, port, process = 0):
-		self.path = path
-		self.name = name
-		self.host = host
-		self.port = port
-		self.process = process
-		self.stage = 0
+	def __init__(self, path, pathConfig, name, host, port, process = 0):
+		self.path = path # Путь до файла запуска сервера
+		self.pathConfig = pathConfig # Путь до файла настроек сервера
+		self.name = name # Имя сервера 
+		self.host = host # Хост сервера
+		self.port = port # Порт сервера
+		self.process = process # Процесс сервера 
+		self.stage = 0 # Состояние сервера
 
 class ServerControl:
 	def __init__(self):
 		print("Server starting")
-		self.activeServer = 0
+
+		# Id активного сервера (костыль, но так надо)
+		self.activeServer = -1
 
 		# Подключаем конфиги
 		config = configparser.ConfigParser()
@@ -29,17 +32,21 @@ class ServerControl:
 		self.log.exception('Server starting')
 
 		# Создаем сервера
-		# todo сюда нужно загружать информация из файла сейва
-		self.servers = []
-		server = Server('./start-server.sh', 'pzServer', '', 5600)
-		server.push(server)
+		# todo это объединить сюда нужно загружать информация из файла сейва
+		self.servers = [] # Список серверов
+		server = Server('./start-server.sh', '/home/arrakktura/Zomboid/Server/servertest.ini', 'pzServer', '', 5600, 0)
+		self.servers.append(server)
 
-		self.host = ''
-		self.port = int(config["Server"]["port"])
+		# Добавляем параметры для серверов из конфиг файла
+		for i in range(len(self.servers)):
+			path = str(config[self.servers[i].name]["path"])
+			pathConfig = str(config[self.servers[i].name]["pathConfig"])
+			name = str(config[self.servers[i].name]["name"])
+			host = str(config[self.servers[i].name]["host"])
+			port = int(config[self.servers[i].name]["port"])
+			process = int(config[self.servers[i].name]["process"])
+			stage = int(config[self.servers[i].name]["stage"])
 
-		self.stage = 0
-		self.servPath = './start-server.sh'
-		self.dir = '/home/arrakktura/Zomboid/Server/servertest.ini'
 		self.socketListen()
 
 	def __del__(self):
@@ -59,65 +66,86 @@ class ServerControl:
 
 	# Слушаем команды
 	def socketListen(self):
+		#Открываем сокет
 		self.sock = socket.socket()
 		self.sock.bind((self.host, self.port))
 		self.sock.listen(5)
 		self.log.exception('Start listen command')
 
 		while 1:
+			# Слушаем запросы
 			self.conn, address = self.sock.accept()
 			data = self.conn.recv(1024)
 			data = data.decode('utf-8')
 			self.log.exception('command(' + data + ')')
 			message = 0
 
-			# Выполняем запросов
-			for server in range(self.servers):
-				if (self.parserCommand(data)['server'] == server.name):
+			# Смотрим на какой сервер пришел запрос
+			self.serverFind(self.parserCommand(data)['server'])
 
-					# Обрабатываем команды
-					if self.parserCommand(data)['command'] == 'restart':
-						message = self.serverRestart()
+			if self.activeServer != -1 and self.activeServer != '':
+				
+				self.activeServer = -1
 
-					if self.parserCommand(data)['command'] == 'stop':
-						message = self.serverStop(self.parserCommand(data)['server'])
+				# Обрабатываем запросы
+				if self.parserCommand(data)['command'] == 'restart':
+					message = self.serverRestart(self.parserCommand(data)['server'])
 
-					if self.parserCommand(data)['command'] == 'start':
-						message = self.serverStart(self.parserCommand(data)['server'])
+				if self.parserCommand(data)['command'] == 'stop':
+					message = self.serverStop(self.parserCommand(data)['server'])
 
-					if self.parserCommand(data)['command'] == 'getModName':
-						messageName = self.getlistModName()
-						messageId = self.getlistModId()
-						message = messageName + '&' + messageId
+				if self.parserCommand(data)['command'] == 'start':
+					message = self.serverStart(self.parserCommand(data)['server'])
 
-					if self.parserCommand(data)['command'] == 'getStage':
-						message = self.getStage(self.parserCommand(data)['server'])
+				if self.parserCommand(data)['command'] == 'getModName':
+					messageName = self.getlistModName(self.parserCommand(data)['server'])
+					messageId = self.getlistModId(self.parserCommand(data)['server'])
+					message = messageName + '&' + messageId
 
-					message = str(message)
-					message = message.encode('utf-8')
+				if self.parserCommand(data)['command'] == 'getStage':
+					message = self.getStage(self.parserCommand(data)['server'])
+
+				if self.parserCommand(data)['command'] == 'getParams':
+					pass
+
+				if self.parserCommand(data)['command'] == 'getLog':
+					pass
+
+				if self.parserCommand(data)['command'] == 'createServer':
+					pass
+
+				if self.parserCommand(data)['command'] == 'deleteServer':
+					pass
+
+				if self.parserCommand(data)['command'] == 'setModName':
+					pass
+
+			# Отправляем ответ
+			message = str(message)
+			message = message.encode('utf-8')
 
 			self.conn.send(message)
 
 	# Поиск сервера
 	def serverFind(self, name):
-		for server in self.servers:
-			if server.name == name:
+		for server in range(len(self.servers)):
+			if self.servers[server].name == name:
 				self.activeServer = server
 		return 0 
 
 	# Перезапуск сервера
-	def serverRestart(self):
-		self.serverStop()
-		self.serverStart()
-		return 1
+	def serverRestart(self, serverName):
+		self.serverStop(serverName)
+		return self.serverStart(serverName)
 
 	# Старт сервера
 	def serverStart(self, serverName):
 		self.serverFind(serverName)
-		if self.activeServer == 0:
+		if self.activeServer == -1:
 			return 0
-		self.activeServer.process = subprocess.Popen(["bash", self.servPath])
-		self.activeServer.stage = 1
+		self.servers[self.activeServer].process = subprocess.Popen(["bash", self.servPath])
+		self.servers[self.activeServer].activeServer.stage = 1
+		self.activeServer = -1
 		self.log.exception('Starting game server')
 		return 1
 
@@ -126,11 +154,11 @@ class ServerControl:
 		self.serverFind(serverName)
 		if self.activeServer == 0:
 			return 0
-		self.activeServer.process = psutil.Process(self.activeServer.process.pid)
-		for proc in self.activeServer5.process.children(recursive=True):
+		self.servers[self.activeServer].process = psutil.Process(self.activeServer.process.pid)
+		for proc in self.servers[self.activeServer].process.children(recursive=True):
 			proc.kill()
-		self.activeServer.process.kill()
-		self.activeServer.stage = 0
+		self.servers[self.activeServer].process.kill()
+		self.servers[self.activeServer].stage = 0
 		self.log.exception('Stop game server')
 		return 1
 
@@ -139,33 +167,40 @@ class ServerControl:
 		self.serverFind(serverName)
 		if self.activeServer == 0:
 			return 0
-		return self.activeServer.stage
+		self.activeServer = -1
+		return self.servers[self.activeServer].stage
 
 	# Установить состояние сервера
-	def setStage(self, stage):
-		self.stage = stage
+	def setStage(self, serverName, stage):
+		self.serverFind(serverName)
+		self.servers[self.activeServer].stage = stage
+		self.activeServer = -1
 		return 0
 
 	# Установить моды
 	def setMode(self):
-		return 'in progress...'
+		return 1
 
 	# Получить список имен модов
-	def getlistModName(self):
-		with open(self.dir) as file:
+	def getlistModName(self, serverName):
+		self.serverFind(serverName)
+		with open(self.servers[self.activeServer].pathConfig) as file:
 			arr = ''
 			for line in file.readlines():
 				if (line[0:4] == 'Mods'):
 					arr +=  line[5:]
+			self.activeServer = -1
 			return arr
 
 	# Получить список id модов
-	def getlistModId(self):
-		with open(self.dir) as file:
+	def getlistModId(self, serverName):
+		self.serverFind(serverName)
+		with open(self.servers[self.activeServer].pathConfig) as file:
 			arr = ''
 			for line in file.readlines():
 				if (line[0:13] == 'WorkshopItems'):
 					arr +=  line[14:]
+				self.activeServer = -1
 			return arr
 
 serv = ServerControl()
