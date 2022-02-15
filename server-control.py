@@ -12,6 +12,10 @@ class Server:
 		self.host = host
 		self.port = port
 
+class ServerMap:
+	def __init__(self):
+		pass
+
 class ServerControl:
 	def __init__(self):
 		print("LOG: Server starting")
