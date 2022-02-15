@@ -32,7 +32,7 @@ class ServerControl:
 		self.log.exception('Server starting')
 
 		# Создаем сервера
-		# todo это объединить сюда нужно загружать информация из файла сейва
+		# todo это объединить со следующим блоком, сюда нужно загружать информацию из файла сейва
 		self.servers = [] # Список серверов
 		server = Server('./start-server.sh', '/home/arrakktura/Zomboid/Server/servertest.ini', 'pzServer', '', 5600, 0)
 		self.servers.append(server)
