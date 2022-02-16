@@ -53,7 +53,7 @@ class ServerControl:
 		pass
 
 	# Парсим строку из запроса
-	def parserCommand(command):
+	def parserCommand(self, command):
 		arr = {'command': '', 'server': ''}
 		place = command.find('&')
 		com = command.find('command')
@@ -120,6 +120,9 @@ class ServerControl:
 				if self.parserCommand(data)['command'] == 'setModName':
 					pass
 
+				if self.parserCommand(data)['command'] == 'getServerList':
+					pass
+
 			# Отправляем ответ
 			message = str(message)
 			message = message.encode('utf-8')
@@ -131,7 +134,6 @@ class ServerControl:
 		for server in range(len(self.servers)):
 			if self.servers[server].name == name:
 				self.activeServer = server
-		return 0 
 
 	# Перезапуск сервера
 	def serverRestart(self, serverName):
@@ -143,8 +145,8 @@ class ServerControl:
 		self.serverFind(serverName)
 		if self.activeServer == -1:
 			return 0
-		self.servers[self.activeServer].process = subprocess.Popen(["bash", self.servPath])
-		self.servers[self.activeServer].activeServer.stage = 1
+		self.servers[self.activeServer].process = subprocess.Popen(["bash", self.servers[self.activeServer].servPath])
+		self.servers[self.activeServer].stage = 1
 		self.activeServer = -1
 		self.log.exception('Starting game server')
 		return 1
@@ -152,20 +154,21 @@ class ServerControl:
 	# Остановка сервера 
 	def serverStop(self, serverName):
 		self.serverFind(serverName)
-		if self.activeServer == 0:
+		if self.activeServer == -1:
 			return 0
 		self.servers[self.activeServer].process = psutil.Process(self.activeServer.process.pid)
 		for proc in self.servers[self.activeServer].process.children(recursive=True):
 			proc.kill()
 		self.servers[self.activeServer].process.kill()
 		self.servers[self.activeServer].stage = 0
+		self.activeServer = -1
 		self.log.exception('Stop game server')
 		return 1
 
 	# Получение состояния сервера
 	def getStage(self, serverName):
 		self.serverFind(serverName)
-		if self.activeServer == 0:
+		if self.activeServer == -1:
 			return 0
 		self.activeServer = -1
 		return self.servers[self.activeServer].stage
@@ -184,6 +187,8 @@ class ServerControl:
 	# Получить список имен модов
 	def getlistModName(self, serverName):
 		self.serverFind(serverName)
+		if self.activeServer == -1:
+			return 0
 		with open(self.servers[self.activeServer].pathConfig) as file:
 			arr = ''
 			for line in file.readlines():
@@ -195,6 +200,8 @@ class ServerControl:
 	# Получить список id модов
 	def getlistModId(self, serverName):
 		self.serverFind(serverName)
+		if self.activeServer == -1:
+			return 0
 		with open(self.servers[self.activeServer].pathConfig) as file:
 			arr = ''
 			for line in file.readlines():
